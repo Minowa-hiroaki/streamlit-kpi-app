@@ -241,3 +241,109 @@ if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01": # 
         )
     else:
         st.write("まだログはありません。")
+
+# --- 管理者画面：要約機能付きバージョン ---
+if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
+    st.divider()
+    st.header("📊 管理者ダッシュボード")
+    
+    # データの読み込み
+    conn = sqlite3.connect(get_file_path('kpi_app.db'))
+    df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
+    conn.close()
+
+    if not df.empty:
+        # 社員ごとに最新の5ターン（1回分の振り返り）を抽出して要約
+        st.subheader("💡 今週の活動要約（AI分析）")
+        
+        for eid in df['employee_id'].unique():
+            if eid == "ADMIN01": continue
+            
+            user_log = df[df['employee_id'] == eid].head(5) # 直近5件を取得
+            user_name = employee_master.get(eid, {}).get("name", eid)
+            
+            # 要約用プロンプト
+            context_text = "\n".join([f"{row['role']}: {row['content']}" for _, row in user_log.iterrows()])
+            summary_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "あなたは優秀な経営参謀です。以下の対話ログを読み、この社員が『今週達成したこと』と『来週の課題』を30文字程度で簡潔に要約してください。"},
+                    {"role": "user", "content": context_text}
+                ]
+            )
+            summary = summary_response.choices[0].message.content
+            
+            # 視認性の高いカード形式で表示
+            with st.expander(f"👤 {user_name} さんの要約"):
+                st.write(f"**AIの分析:** {summary}")
+
+        st.divider()
+        st.subheader("📝 詳細ログ（全データ）")
+        # 前回の表表示とダウンロードボタンをここに配置
+        # ... (以下、前回のコードと同様)
+
+# --- 査定支援機能のイメージ（管理者画面内） ---
+st.subheader("🏆 人事査定・昇進シミュレーター")
+
+# 1. 査定対象の社員を選択
+target_eid = st.selectbox("査定する社員を選択", [eid for eid in employee_master.keys() if eid != "ADMIN01"])
+
+# 2. 過去の全ログから「今期のハイライト」を抽出
+target_logs = df[df['employee_id'] == target_eid]
+
+if st.button(f"{employee_master[target_eid]['name']} さんの今期の査定案を作成"):
+    # AIへの査定依頼プロンプト
+    prompt = f"""
+    以下の半年間の活動ログを分析し、賞与査定と昇進の判断材料を作成してください。
+    【出力項目】
+    1. 今期の主要な成果（具体的な数字や行動）
+    2. 部署KPI「{dept_kpis}」への貢献度
+    3. 昇進に向けたリーダーシップやリスク管理の評価
+    4. 総合的な査定ランク案（S〜D）とその理由
+    """
+    # ここでAIが半年分のデータをまとめて分析（※データ量が多い場合は工夫が必要です）
+    st.info("AIによる査定原案を作成しました。これをベースに評価を検討してください。")
+# --- 管理者画面：個人別詳細・査定支援機能 ---
+if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
+    st.divider()
+    st.header("🏆 人事評価・査定支援ダッシュボード")
+
+    # データの再読み込み
+    conn = sqlite3.connect(get_file_path('kpi_app.db'))
+    df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
+    conn.close()
+
+    if not df.empty:
+        # 1. 査定対象の選択
+        target_options = {eid: f"{info['name']} ({info['department']})" for eid, info in employee_master.items() if eid != "ADMIN01"}
+        selected_eid = st.selectbox("査定・分析する社員を選択してください", options=list(target_options.keys()), format_func=lambda x: target_options[x])
+
+        # 2. 選択された社員の全ログを抽出
+        personal_logs = df[df['employee_id'] == selected_eid].sort_values('timestamp', ascending=True)
+
+        if not personal_logs.empty:
+            st.subheader(f"📈 {employee_master[selected_eid]['name']} さんの成長ログ")
+            
+            # AI査定支援ボタン
+            if st.button(f"{employee_master[selected_eid]['name']} さんの評価案を生成"):
+                with st.spinner("半年間のログを分析中..."):
+                    all_text = "\n".join([f"{row['timestamp']} [{row['role']}]: {row['content']}" for _, row in personal_logs.iterrows()])
+                    
+                    review_response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": f"あなたは公平な人事評価委員です。部署KPI「{dept_definitions.get(employee_master[selected_eid]['department'], '')}」を考慮し、この社員の評価案を作成してください。"},
+                            {"role": "user", "content": f"以下の全ログを読み、1.主な成果、2.KPIへの貢献度、3.昇進に向けた課題、4.査定ランク案(S-D)を詳しく述べてください。\n\n{all_text}"}
+                        ]
+                    )
+                    st.success("AIによる評価レポートが生成されました")
+                    st.markdown(review_response.choices[0].message.content)
+
+            # 詳細なやり取り履歴
+            with st.expander("全対話履歴を確認する"):
+                st.dataframe(personal_logs[['timestamp', 'role', 'content', 'turn_count']], use_container_width=True)
+        else:
+            st.info("この社員の記録はまだありません。")
+
+    else:
+        st.write("まだ全社的にログが蓄積されていません。")
