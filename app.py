@@ -211,6 +211,8 @@ if prompt := st.chat_input("メッセージを入力してEnterで送信"):
 
 # ログインしているIDが ADMIN01 の場合のみ、以下の処理を実行する
 if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
+    import pandas as pd
+
     st.divider()
     st.header("🏆 人事査定・昇進シミュレーター")
 
