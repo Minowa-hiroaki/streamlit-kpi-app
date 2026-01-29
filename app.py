@@ -206,3 +206,38 @@ if prompt := st.chat_input("メッセージを入力してEnterで送信"):
         if st.session_state.turn_count < 5:
             st.session_state.turn_count += 1
             st.rerun()
+
+# --- 6. 管理者画面の追加 (app.pyの末尾に追加) ---
+
+# 管理者かどうかの判定（ここでは例として管理者の名前や部署で判定）
+if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01": # 管理者IDを仮にADMIN01とします
+    st.divider()
+    st.subheader("📊 管理者用：全社員対話ログ")
+
+    conn = sqlite3.connect(get_file_path('kpi_app.db'))
+    # 全データを取得（新しい順）
+    import pandas as pd
+    df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
+    conn.close()
+
+    if not df.empty:
+        # 社員名を表示するためにマスターと結合
+        master_df = pd.DataFrame.from_dict(employee_master, orient='index').reset_index()
+        master_df.columns = ['employee_id', 'name', 'department']
+        display_df = pd.merge(df, master_df, on='employee_id', how='left')
+        
+        # 必要な列だけを並び替えて表示
+        display_df = display_df[['timestamp', 'name', 'department', 'role', 'content', 'turn_count']]
+        
+        st.dataframe(display_df, use_container_width=True)
+
+        # Excel/CSVダウンロードボタン
+        csv = display_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="ログをCSVでダウンロード",
+            data=csv,
+            file_name=f"kpi_log_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.write("まだログはありません。")
