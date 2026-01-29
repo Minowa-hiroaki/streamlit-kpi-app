@@ -88,51 +88,39 @@ user_info = employee_master[st.session_state.login_id]
 user_name = user_info["name"]
 dept_name = user_info["department"]
 
-# --- 4. サイドバー表示（blue文字修正・スクロール対策） ---
+# --- 4. サイドバー（メニュー切り替え機能付き） ---
 with st.sidebar:
     st.markdown("""
         <style>
         [data-testid="stSidebar"] { background-color: #f8f9fa; }
-        [data-testid="stSidebar"] > div:first-child { padding-top: 1rem; }
-        .step-active { color: #007bff; font-weight: bold; font-size: 0.9rem; margin-bottom: 0px; }
-        .step-inactive { color: #6c757d; font-size: 0.85rem; margin-bottom: 0px; }
-        .step-done { color: #adb5bd; text-decoration: line-through; font-size: 0.85rem; margin-bottom: 0px; }
-        .step-desc { font-size: 0.72rem; color: #868e96; margin-left: 1.2rem; margin-bottom: 8px; line-height: 1.2; }
-        .kpi-title { font-weight: bold; font-size: 0.95rem; margin-top: 1rem; margin-bottom: 0.5rem; }
-        .kpi-item { font-size: 0.82rem; line-height: 1.4; margin-bottom: 6px; }
-        hr { margin: 0.8rem 0 !important; }
+        .step-active { color: #007bff; font-weight: bold; font-size: 0.9rem; }
+        .kpi-title { font-weight: bold; font-size: 0.95rem; margin-top: 1rem; }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("### 想定される会話の流れ")
-    turns_desc = [
-        ("① 共有", "今週の出来事を報告"),
-        ("② 深掘りI", "行動や数値を具体化"),
-        ("③ 深掘りII", "リスクや懸念の検証"),
-        ("④ フィードバック", "KPI視点での助言"),
-        ("⑤ 次の目標", "来週の目標を確定")
-    ]
-    current_turn = st.session_state.get("turn_count", 1)
+    st.title("メニュー")
+    # ここで画面を切り替えるためのラジオボタンを表示します
+    menu_options = ["振り返り対話", "マイページ（目標・AI相談）"]
+    if st.session_state.login_id == "ADMIN01":
+        menu_options.append("管理者画面")
     
-    for i, (t, desc) in enumerate(turns_desc, 1):
-        if i == current_turn:
-            st.markdown(f"<p class='step-active'>👉 {t}</p>", unsafe_allow_html=True)
-            st.markdown(f"<div class='step-desc'>{desc}</div>", unsafe_allow_html=True)
-        elif i < current_turn:
-            st.markdown(f"<p class='step-done'>✅ {t}</p>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<p class='step-inactive'>　 {t}</p>", unsafe_allow_html=True)
-            st.markdown(f"<div class='step-desc'>{desc}</div>", unsafe_allow_html=True)
+    # この 'page' 変数で表示する画面をコントロールします
+    page = st.radio("表示する画面を選択", menu_options)
 
     st.divider()
-    
-    st.markdown(f"<div class='kpi-title'>{dept_name}のKPI</div>", unsafe_allow_html=True)
-    current_kpis = kpi_data.get(dept_name, [])
-    if current_kpis:
-        for k in current_kpis:
-            st.markdown(f"<div class='kpi-item'>・{k}</div>", unsafe_allow_html=True)
-    else:
-        st.caption("KPI未設定")
+
+    # 「振り返り対話」の時だけ、これまでのガイドを表示する
+    if page == "振り返り対話":
+        st.markdown("### 想定される会話の流れ")
+        st.caption("①共有 → ②深掘り → ③リスク検証 → ④評価 → ⑤目標確定")
+        st.divider()
+        st.markdown(f"<div class='kpi-title'>{dept_name}のKPI</div>", unsafe_allow_html=True)
+        for k in kpi_data.get(dept_name, []):
+            st.markdown(f"・{k}")
+
+    if st.button("ログアウト", use_container_width=True):
+        for key in list(st.session_state.keys()): del st.session_state[key]
+        st.rerun()
 
 # --- 5. メイン画面レイアウト ---
 head_col, btn_col = st.columns([5, 1])
