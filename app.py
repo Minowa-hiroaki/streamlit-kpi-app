@@ -249,3 +249,4 @@ elif page == "マイページ（目標・AI相談）":
                 st.info(res.choices[0].message.content)
 
 elif page == "管理者画面":
+    pass
