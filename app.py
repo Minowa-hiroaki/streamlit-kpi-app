@@ -347,3 +347,28 @@ if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
 
     else:
         st.write("まだ全社的にログが蓄積されていません。")
+
+# --- 修正後の管理者画面セクション ---
+
+# 必ず「ADMIN01」の時だけ動くように、このif文の中にすべてを入れます
+if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
+    st.divider()
+    st.header("🏆 人事査定・昇進シミュレーター")
+
+    # 1. データの読み込み（ここもif文の中なので一般社員時は実行されません）
+    conn = sqlite3.connect(get_file_path('kpi_app.db'))
+    df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
+    conn.close()
+
+    if not df.empty:
+        # 2. 査定対象の選択
+        target_options = {eid: f"{info['name']} ({info['department']})" for eid, info in employee_master.items() if eid != "ADMIN01"}
+        target_eid = st.selectbox("査定する社員を選択", options=list(target_options.keys()), format_func=lambda x: target_options[x])
+
+        # 3. 選択された社員のログを抽出
+        target_logs = df[df['employee_id'] == target_eid]
+        
+        # ... 以降の分析・表示処理もすべてこのif文の中に配置 ...
+        st.write(f"現在は {target_eid} さんのデータを分析しています。")
+    else:
+        st.info("まだ対話ログがありません。")
