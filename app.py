@@ -32,6 +32,8 @@ def load_json_data(filename):
 
 kpi_data = load_json_data("kpi_definitions.json")
 employee_master = load_json_data("employee_master.json")
+# kpis という別名も用意（管理者画面のコード互換のため）
+kpis = kpi_data
 
 def init_db():
     conn = sqlite3.connect(get_file_path('kpi_app.db'))
@@ -279,3 +281,74 @@ if "login_id" in st.session_state and st.session_state.login_id == "ADMIN01":
             st.info(f"{employee_master[selected_eid]['name']} さんの記録はまだありません。")
     else:
         st.info("現在、社内に蓄積された対話ログはありません。")
+
+# --- サイドバーによるメニュー切り替え ---
+with st.sidebar:
+    st.title("メニュー")
+    # 管理者の場合は管理者画面も選択肢に出す
+    menu_options = ["振り返り対話", "マイページ（目標・メモ）"]
+    if st.session_state.get("login_id") == "ADMIN01":
+        menu_options.append("管理者画面")
+    
+    page = st.radio("表示する画面を選択", menu_options)
+    st.divider()
+    if st.button("ログアウト"):
+        st.session_state.clear()
+        st.rerun()
+
+# --- 各画面の処理 ---
+
+# どの画面でも使う「前回の目標」取得（pandasが必要なのでimportも保証）
+import pandas as pd
+conn = sqlite3.connect(get_file_path('kpi_app.db'))
+prev_goal = pd.read_sql_query(
+    "SELECT content FROM messages WHERE employee_id=? AND role='assistant' AND content LIKE '%【次回の目標】%' ORDER BY timestamp DESC LIMIT 1",
+    conn, params=(st.session_state.login_id,)
+)
+conn.close()
+
+# 1. 振り返り対話画面
+if page == "振り返り対話":
+    st.header(f"💬 {user_info['name']} さんの今週の振り返り")
+    
+    # 【追加機能】前回の目標を画面上部に表示しておく
+    with st.expander("前回の目標を確認する", expanded=True):
+        if not prev_goal.empty:
+            st.info(prev_goal.iloc[0]['content'])
+        else:
+            st.write("設定された目標はまだありません。今日の振り返りで決めましょう！")
+
+    # （ここから下に、これまでの対話チャット機能が続きます）
+
+# 2. マイページ（目標・メモ・AI相談）
+elif page == "マイページ（目標・メモ）":
+    st.header(f"📱 {user_info['name']} さんのマイページ")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 現在の目標と指針")
+        # 前回の目標とAIのアドバイスを再掲
+        if not prev_goal.empty:
+            st.success(prev_goal.iloc[0]['content'])
+        
+        st.subheader("📓 自分の成長メモ")
+        st.text_area("自分だけの気づきを記録（他の人には見えません）", height=200, placeholder="今週気づいたことや、次の面談で話したいことなど...")
+        st.button("メモを保存（デモ）")
+
+    with col2:
+        st.subheader("🤖 AIメンターに自由相談")
+        st.caption("振り返り以外でも、仕事の悩みやスキルアップについて相談できます。")
+        free_query = st.text_input("AIに質問する（例：効率的なタスク管理の方法は？）")
+        if free_query:
+            with st.spinner("AIが回答を生成中..."):
+                res = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": free_query}]
+                )
+                st.chat_message("assistant").write(res.choices[0].message.content)
+
+# 3. 管理者画面（ADMIN01のみ）
+elif page == "管理者画面":
+    # （ここに以前作成した管理者用コードを配置します）
+    pass
