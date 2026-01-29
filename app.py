@@ -88,50 +88,54 @@ user_info = employee_master[st.session_state.login_id]
 user_name = user_info["name"]
 dept_name = user_info["department"]
 
-# --- 4. サイドバー（メニュー切り替え機能付き） ---
+# --- 4. サイドバー（メニュー切り替えと連動） ---
 with st.sidebar:
-    st.markdown("""
-        <style>
-        [data-testid="stSidebar"] { background-color: #f8f9fa; }
-        .step-active { color: #007bff; font-weight: bold; font-size: 0.9rem; }
-        .kpi-title { font-weight: bold; font-size: 0.95rem; margin-top: 1rem; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.title("メニュー")
-    # ここで画面を切り替えるためのラジオボタンを表示します
+    st.title("🌱 メニュー")
+    
+    # ここで「どの画面を表示するか」を選べるようにします
     menu_options = ["振り返り対話", "マイページ（目標・AI相談）"]
     if st.session_state.login_id == "ADMIN01":
         menu_options.append("管理者画面")
     
-    # この 'page' 変数で表示する画面をコントロールします
+    # 選択された値を page 変数に格納
     page = st.radio("表示する画面を選択", menu_options)
-
+    
     st.divider()
 
-    # 「振り返り対話」の時だけ、これまでのガイドを表示する
+    # 「振り返り対話」の時だけ、ガイドを表示する
     if page == "振り返り対話":
         st.markdown("### 想定される会話の流れ")
         st.caption("①共有 → ②深掘り → ③リスク検証 → ④評価 → ⑤目標確定")
+        
         st.divider()
-        st.markdown(f"<div class='kpi-title'>{dept_name}のKPI</div>", unsafe_allow_html=True)
+        st.markdown(f"**{dept_name}のKPI**")
         for k in kpi_data.get(dept_name, []):
             st.markdown(f"・{k}")
 
+    # ログアウトボタンを一番下に配置
     if st.button("ログアウト", use_container_width=True):
-        for key in list(st.session_state.keys()): del st.session_state[key]
+        st.session_state.clear()
         st.rerun()
 
+# --- 5. メイン画面の表示切り替え ---
+
+# 【振り返り対話】画面
+if page == "振り返り対話":
+    st.header("💬 今週の振り返り")
+    # ...（これまでの対話用コードをここに配置）...
+
+# 【マイページ】画面
+elif page == "マイページ（目標・AI相談）":
+    st.header(f"📱 {user_name} さんのマイページ")
+    # ...（前回のマイページ用コードをここに配置）...
+
+# 【管理者画面】
+# 【管理者画面】
+elif page == "管理者画面":
+    # ...（管理者用コードをここに配置）...
+    pass
 # --- 5. メイン画面レイアウト ---
-head_col, btn_col = st.columns([5, 1])
-with head_col:
-    st.header("🌱 今日の一歩")
-with btn_col:
-    st.write("") 
-    if st.button("ログアウト", use_container_width=True):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+# 不要なコードを削除（インデントエラー解消）
 
 st.write(f"**{user_name} さん / {dept_name}**")
 
