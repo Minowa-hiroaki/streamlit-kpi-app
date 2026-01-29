@@ -1,4 +1,8 @@
 {
+  "ADMIN01": {
+        "name": "管理者",
+        "department": "管理部"
+    },
   "E001": {
     "name": "山田太郎",
     "department": "営業部"
