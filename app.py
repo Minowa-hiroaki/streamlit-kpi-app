@@ -76,8 +76,6 @@ if "login_id" not in st.session_state:
         if input_id:
             if input_id in employee_master:
                 st.session_state.login_id = input_id
-                st.session_state.user_name = employee_master[input_id]["name"]
-                st.session_state.department = employee_master[input_id]["department"]
                 st.rerun()
             else:
                 st.error("該当する社員IDが見つかりません。")
@@ -89,7 +87,7 @@ user_info = employee_master[st.session_state.login_id]
 user_name = user_info["name"]
 dept_name = user_info["department"]
 
-# --- 4. サイドバー表示（メニュー切り替えとステップガイドの統合） ---
+# --- 4. サイドバー表示（メニュー・ガイド・KPIの統合） ---
 with st.sidebar:
     st.markdown("""
         <style>
@@ -113,7 +111,6 @@ with st.sidebar:
     page = st.radio("表示する画面を選択", menu_options)
     st.divider()
 
-    # 「振り返り対話」の時のみ、会話の流れを表示
     if page == "振り返り対話":
         st.markdown("### 想定される会話の流れ")
         turns_desc = [
@@ -148,16 +145,13 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- 5. メイン画面レイアウト ---
+# --- 5. メメイン画面表示エリア ---
 
 if page == "振り返り対話":
-    head_col, _ = st.columns([5, 1])
-    with head_col:
-        st.header("🌱 今日の一歩")
-
+    st.header("🌱 今日の一歩")
     st.write(f"**{user_name} さん / {dept_name}**")
 
-    # 【新機能】前回の目標を上部に表示
+    # --- 前回の目標を要約して表示するロジック ---
     with st.expander("📌 前回の目標を確認する", expanded=True):
         conn = sqlite3.connect(get_file_path('kpi_app.db'))
         goal_df = pd.read_sql_query(
@@ -165,15 +159,24 @@ if page == "振り返り対話":
             conn, params=(st.session_state.login_id,)
         )
         conn.close()
+        
         if not goal_df.empty:
-            st.info(goal_df.iloc[0]['content'])
+            full_text = goal_df.iloc[0]['content']
+            # 「。それでは」などの決まり文句で分割し、目標部分を抽出
+            try:
+                if "次回の目標は、" in full_text:
+                    summary = full_text.split("次回の目標は、")[1].split("。")[0]
+                else:
+                    summary = full_text.split("。")[-2] if len(full_text.split("。")) > 1 else full_text
+                st.info(f"🎯 **前回の目標：{summary}**")
+            except:
+                st.info(f"🎯 **前回の目標：{full_text[:50]}...**")
         else:
-            st.write("設定された目標はまだありません。今日の会話で決めましょう！")
+            st.write("設定された目標はまだありません。今日の振り返りで決めましょう！")
 
+    # --- ガイドメッセージ（改行入り） ---
     st.info("""
-    💡 週一回の共有を推奨していますが、アピールしたいことがあればいつでも共有OKです。  
-    💡 共有が多いほど、アピールのチャンスとなります！  
-    💡 課題やトラブルも共有してください。解決済みでも未解決でも大丈夫。今後どうしていくか一緒に考えましょう。
+        💡 **週一回の共有を推奨していますが、アピールしたいことがあればいつでも共有OKです。** 💡 **共有が多いほど、アピールのチャンスとなります！** 💡 **課題やトラブルも共有してください。解決済みでも未解決でも大丈夫。今後どうしていくか一緒に考えましょう。**
     """)
 
     if "messages" not in st.session_state:
@@ -184,7 +187,7 @@ if page == "振り返り対話":
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    if prompt := st.chat_input("メッセージを入力してEnterで送信"):
+    if prompt := st.chat_input("メッセージを入力..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
@@ -195,8 +198,8 @@ if page == "振り返り対話":
 
             system_prompt = f"""
             あなたは{dept_name}のコーチです。部署KPIは「{dept_kpis}」です。
-            全5ターンの対話フローのうち、現在は【ターン {turn}】です。
-            対話の最後には必ず次週の目標を提示し、「今週の振り返りを完了しました」という一言で締めてください。
+            現在は【ターン {turn}/5】です。
+            ターン5では必ず次週の目標をまとめ、「次回の目標は、[目標内容]です。それでは、今週の振り返りを完了しました。」と締めてください。
             """
             
             response = client.chat.completions.create(
@@ -233,33 +236,16 @@ elif page == "マイページ（目標・AI相談）":
         if not goal_df.empty:
             st.success(f"**設定日: {goal_df.iloc[0]['timestamp']}**\n\n{goal_df.iloc[0]['content']}")
         
-        st.subheader("📓 自分用成長メモ")
-        st.text_area("気づきを記録（非公開）", height=200)
+        st.subheader("📓 自分用メモ")
+        st.text_area("気づきを記録（非公開・一時保存）", height=200)
         st.button("メモを保存（デモ）")
 
     with col2:
         st.subheader("🤖 AIメンターへの自由相談")
         query = st.text_input("仕事の悩みや相談をどうぞ")
         if query:
-            res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": query}])
-            st.info(res.choices[0].message.content)
+            with st.spinner("AIが回答中..."):
+                res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": query}])
+                st.info(res.choices[0].message.content)
 
 elif page == "管理者画面":
-    import pandas as pd
-    st.header("🏆 人事査定・昇進シミュレーター")
-    # --- 管理者ロジック ---
-    try:
-        conn = sqlite3.connect(get_file_path('kpi_app.db'))
-        df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
-        conn.close()
-        if not df.empty:
-            target_options = {eid: f"{info['name']} ({info['department']})" for eid, info in employee_master.items() if eid != "ADMIN01"}
-            selected_eid = st.selectbox("査定する社員を選択", options=list(target_options.keys()), format_func=lambda x: target_options[x])
-            t_logs = df[df['employee_id'] == selected_eid].sort_values('timestamp', ascending=True)
-            if st.button("評価案を生成"):
-                all_text = "\n".join([f"{row['role']}: {row['content']}" for _, row in t_logs.iterrows()])
-                res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "system", "content": "人事評価者として分析して"}, {"role": "user", "content": all_text}])
-                st.markdown(res.choices[0].message.content)
-            st.dataframe(t_logs)
-    except Exception as e:
-        st.error(f"データ読み込みエラー: {e}")
