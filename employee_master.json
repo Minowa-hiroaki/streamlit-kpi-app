@@ -1,18 +1,22 @@
 {
   "ADMIN01": {
-        "name": "管理者",
-        "department": "管理部"
-    },
+    "name": "管理者",
+    "department": "管理部",
+    "password": "ADMIN01"
+  },
   "E001": {
     "name": "山田太郎",
-    "department": "営業部"
+    "department": "営業部",
+    "password": "E001"
   },
   "E002": {
     "name": "佐藤花子",
-    "department": "電算室"
+    "department": "電算室",
+    "password": "E002"
   },
   "E003": {
     "name": "鈴木一郎",
-    "department": "品質保証部"
+    "department": "品質保証部",
+    "password": "E003"
   }
 }

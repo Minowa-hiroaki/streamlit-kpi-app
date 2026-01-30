@@ -27,7 +27,7 @@ def get_file_path(filename):
 def load_json_data(filename):
     path = get_file_path(filename)
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8-sig") as f:
+        with open(path, "r", encoding="utf-8") as f:  # ←ここをutf-8に
             return json.load(f)
     return {}
 
@@ -78,7 +78,7 @@ if "login_id" not in st.session_state:
             if submitted:
                 if input_id in employee_master:
                     user_info = employee_master[input_id]
-                    pw_ok = user_info.get("password") == input_pw
+                    pw_ok = str(user_info.get("password")) == str(input_pw)  # ←ここに修正
                     if pw_ok:
                         st.session_state.login_id = input_id
                         st.rerun()
@@ -99,9 +99,10 @@ dept_name = user_info["department"]
 def update_password(new_pw):
     import json
     employee_master[st.session_state.login_id]["password"] = new_pw
-    # employee_master.jsonを上書き保存
-    with open(get_file_path("employee_master.json"), "w", encoding="utf-8-sig") as f:
+    with open(get_file_path("employee_master.json"), "w", encoding="utf-8") as f:  # ←ここもutf-8に
         json.dump(employee_master, f, ensure_ascii=False, indent=2)
+    global employee_master
+    employee_master = load_json_data("employee_master.json")  # ←再読込
 
 with st.sidebar:
     st.markdown("---")
