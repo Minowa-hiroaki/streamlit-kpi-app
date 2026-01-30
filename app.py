@@ -4,7 +4,6 @@ import sqlite3
 import json
 import os
 import pandas as pd
-import re
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -40,19 +39,27 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS messages 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT, role TEXT, content TEXT, turn_count INTEGER, timestamp TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS free_consultations 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id TEXT, role TEXT, content TEXT, timestamp TEXT)''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- 3. ログイン管理（パスワード対応） ---
+# --- 3. ログイン管理（コンパクト・中央寄せ） ---
 if "login_id" not in st.session_state:
     st.markdown("""
         <style>
-        .login-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 10vh; }
-        .login-content { width: 100%; max-width: 350px; text-align: left; }
+        .login-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-top: 10vh;
+        }
+        .login-content {
+            width: 100%;
+            max-width: 350px;
+            text-align: left;
+        }
         .login-content h2 { margin-bottom: 0px; }
         .login-content p { margin-bottom: 10px; font-size: 0.85rem; color: #666; }
         </style>
@@ -64,36 +71,35 @@ if "login_id" not in st.session_state:
         st.markdown("<h2>🌱 今日の一歩</h2>", unsafe_allow_html=True)
         st.markdown("<p>社員ログイン</p>", unsafe_allow_html=True)
         
-        input_id = st.text_input("社員IDを入力", key="login_input")
-        input_pw = st.text_input("パスワードを入力", type="password", key="pw_input")
+        input_id = st.text_input("社員IDを入力してEnterを押してください", key="login_input", placeholder="例: E001")
         
-        if st.button("ログイン", use_container_width=True):
+        if input_id:
             if input_id in employee_master:
-                correct_pw = employee_master[input_id].get("password", "password123")
-                if input_pw == correct_pw:
-                    st.session_state.login_id = input_id
-                    st.rerun()
-                else:
-                    st.error("パスワードが正しくありません。")
+                st.session_state.login_id = input_id
+                st.rerun()
             else:
                 st.error("該当する社員IDが見つかりません。")
         st.markdown("</div></div>", unsafe_allow_html=True)
     st.stop()
 
+# ユーザー情報の特定
 user_info = employee_master[st.session_state.login_id]
 user_name = user_info["name"]
 dept_name = user_info["department"]
 
-# --- 4. サイドバー表示（ステップガイド統合） ---
+# --- 4. サイドバー表示（メニュー・ガイド・KPIの統合） ---
 with st.sidebar:
     st.markdown("""
         <style>
         [data-testid="stSidebar"] { background-color: #f8f9fa; }
-        .step-active { color: #007bff; font-weight: bold; font-size: 0.9rem; }
-        .step-done { color: #adb5bd; text-decoration: line-through; font-size: 0.85rem; }
-        .step-inactive { color: #6c757d; font-size: 0.85rem; }
-        .kpi-title { font-weight: bold; font-size: 0.95rem; margin-top: 1rem; }
-        .kpi-item { font-size: 0.82rem; line-height: 1.4; }
+        [data-testid="stSidebar"] > div:first-child { padding-top: 1rem; }
+        .step-active { color: #007bff; font-weight: bold; font-size: 0.9rem; margin-bottom: 0px; }
+        .step-inactive { color: #6c757d; font-size: 0.85rem; margin-bottom: 0px; }
+        .step-done { color: #adb5bd; text-decoration: line-through; font-size: 0.85rem; margin-bottom: 0px; }
+        .step-desc { font-size: 0.72rem; color: #868e96; margin-left: 1.2rem; margin-bottom: 8px; line-height: 1.2; }
+        .kpi-title { font-weight: bold; font-size: 0.95rem; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .kpi-item { font-size: 0.82rem; line-height: 1.4; margin-bottom: 6px; }
+        hr { margin: 0.8rem 0 !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -102,50 +108,77 @@ with st.sidebar:
     if st.session_state.login_id == "ADMIN01":
         menu_options.append("管理者画面")
     
-    page = st.radio("画面を選択", menu_options, label_visibility="collapsed")
+    page = st.radio("表示する画面を選択", menu_options)
     st.divider()
 
     if page == "振り返り対話":
         st.markdown("### 想定される会話の流れ")
-        turns = [("① 共有", "報告"), ("② 深掘りI", "具体化"), ("③ 深掘りII", "検証"), ("④ 助言", "評価"), ("⑤ 目標", "確定")]
+        turns_desc = [
+            ("① 共有", "今週の出来事を報告"),
+            ("② 深掘りI", "行動や数値を具体化"),
+            ("③ 深掘りII", "リスクや懸念の検証"),
+            ("④ フィードバック", "KPI視点での助言"),
+            ("⑤ 次の目標", "来週の目標を確定")
+        ]
         current_turn = st.session_state.get("turn_count", 1)
-        for i, (t, _) in enumerate(turns, 1):
-            if i == current_turn: st.markdown(f"<p class='step-active'>👉 {t}</p>", unsafe_allow_html=True)
-            elif i < current_turn: st.markdown(f"<p class='step-done'>✅ {t}</p>", unsafe_allow_html=True)
-            else: st.markdown(f"<p class='step-inactive'>　 {t}</p>", unsafe_allow_html=True)
+        
+        for i, (t, desc) in enumerate(turns_desc, 1):
+            if i == current_turn:
+                st.markdown(f"<p class='step-active'>👉 {t}</p>", unsafe_allow_html=True)
+                st.markdown(f"<div class='step-desc'>{desc}</div>", unsafe_allow_html=True)
+            elif i < current_turn:
+                st.markdown(f"<p class='step-done'>✅ {t}</p>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<p class='step-inactive'>　 {t}</p>", unsafe_allow_html=True)
+                st.markdown(f"<div class='step-desc'>{desc}</div>", unsafe_allow_html=True)
 
         st.divider()
         st.markdown(f"<div class='kpi-title'>{dept_name}のKPI</div>", unsafe_allow_html=True)
-        for k in kpi_data.get(dept_name, []):
-            st.markdown(f"<div class='kpi-item'>・{k}</div>", unsafe_allow_html=True)
+        current_kpis = kpi_data.get(dept_name, [])
+        if current_kpis:
+            for k in current_kpis:
+                st.markdown(f"<div class='kpi-item'>・{k}</div>", unsafe_allow_html=True)
+        else:
+            st.caption("KPI未設定")
 
     if st.button("ログアウト", use_container_width=True):
         st.session_state.clear()
         st.rerun()
 
-# --- 5. メイン画面エリア ---
+# --- 5. メメイン画面表示エリア ---
 
 if page == "振り返り対話":
     st.header("🌱 今日の一歩")
     st.write(f"**{user_name} さん / {dept_name}**")
 
-    # 前回目標の要約抽出
+    # --- 前回の目標をAIで抽出し表示（📌不要・要約ロジック強化） ---
     conn = sqlite3.connect(get_file_path('kpi_app.db'))
-    goal_df = pd.read_sql_query("SELECT content FROM messages WHERE employee_id=? AND role='assistant' AND content LIKE '%完了しました%' ORDER BY timestamp DESC LIMIT 1", conn, params=(st.session_state.login_id,))
+    goal_df = pd.read_sql_query(
+        "SELECT content FROM messages WHERE employee_id=? AND role='assistant' AND content LIKE '%完了しました%' ORDER BY timestamp DESC LIMIT 1", 
+        conn, params=(st.session_state.login_id,)
+    )
     conn.close()
     
     if not goal_df.empty:
-        raw_text = goal_df.iloc[0]['content']
+        raw_content = goal_df.iloc[0]['content']
+        # 内部的にAIを使用して、目標となる一文のみを抽出する
         try:
-            ex_res = client.chat.completions.create(
+            extraction_response = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[{"role": "system", "content": "具体的な目標を1文で抜き出してください。"}, {"role": "user", "content": raw_text}]
+                messages=[
+                    {"role": "system", "content": "以下のコーチングメッセージから、コーチが提示した『次回の具体的な行動目標』にあたる1文だけを抜き出してください。余計な挨拶や「それでは」といった言葉は削除し、目標のみを簡潔に示してください。"},
+                    {"role": "user", "content": raw_content}
+                ]
             )
-            summary = ex_res.choices[0].message.content
+            summary = extraction_response.choices[0].message.content
             st.info(f"🎯 **前回の目標：{summary}**")
         except:
-            st.info(f"🎯 **前回の目標：データの解析に失敗しました。**")
+            # 抽出失敗時のフォールバック
+            st.info(f"🎯 **前回の目標：目標データの解析に失敗しました。**")
+    else:
+        st.write("設定された目標はまだありません。今日の振り返りで決めましょう！")
 
+    # --- ガイドメッセージ（改行入りで見やすく表示） ---
     st.info("""
         💡 週一回の共有を推奨していますが、アピールしたいことがあればいつでも共有OKです。  
         💡 共有が多いほど、アピールのチャンスとなります！  
@@ -153,92 +186,90 @@ if page == "振り返り対話":
     """)
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "お疲れ様でした！今週の出来事を教えてください。"}]
-        st.session_count = 1
+        st.session_state.messages = [{"role": "assistant", "content": "お疲れさまでした！今日の共有したいこと（売上、コスト、業務効率化、顧客満足度、トラブル）は何ですか？"}]
+        st.session_state.turn_count = 1
 
     for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]): st.write(msg["content"])
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
 
     if prompt := st.chat_input("メッセージを入力..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
         with st.chat_message("assistant"):
-            turn = st.session_state.get("turn_count", 1)
+            turn = st.session_state.turn_count
             dept_kpis = "、".join(kpi_data.get(dept_name, []))
-            sys_p = f"あなたは{dept_name}のコーチです。KPI「{dept_kpis}」を基に対話してください。現在はターン {turn}/5 です。最後は必ず具体的な『次回の目標』を提示し、『今週の振り返りを完了しました』と締めてください。"
-            res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "system", "content": sys_p}] + st.session_state.messages)
-            ai_msg = res.choices[0].message.content
+
+            system_prompt = f"""
+            あなたは{dept_name}のコーチです。部署KPIは「{dept_kpis}」です。
+            現在は【ターン {turn}/5】です。
+            ターン5では必ず次週の目標をまとめ、「次回の目標は、[目標内容]です。それでは、今週の振り返りを完了しました。」と締めてください。
+            """
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": system_prompt}] + st.session_state.messages
+            )
+            ai_msg = response.choices[0].message.content
             st.write(ai_msg)
             st.session_state.messages.append({"role": "assistant", "content": ai_msg})
 
+            # DB保存
             conn = sqlite3.connect(get_file_path('kpi_app.db'))
+            c = conn.cursor()
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute("INSERT INTO messages (employee_id, role, content, turn_count, timestamp) VALUES (?, ?, ?, ?, ?)", (st.session_state.login_id, "user", prompt, turn, now))
-            conn.execute("INSERT INTO messages (employee_id, role, content, turn_count, timestamp) VALUES (?, ?, ?, ?, ?)", (st.session_state.login_id, "assistant", ai_msg, turn, now))
-            conn.commit(); conn.close()
-            if st.session_state.get("turn_count", 1) < 5: 
-                st.session_state.turn_count = st.session_state.get("turn_count", 1) + 1
+            c.execute("INSERT INTO messages (employee_id, role, content, turn_count, timestamp) VALUES (?, ?, ?, ?, ?)",
+                      (st.session_state.login_id, "user", prompt, turn, now))
+            c.execute("INSERT INTO messages (employee_id, role, content, turn_count, timestamp) VALUES (?, ?, ?, ?, ?)",
+                      (st.session_state.login_id, "assistant", ai_msg, turn, now))
+            conn.commit()
+            conn.close()
+
+            if st.session_state.turn_count < 5:
+                st.session_state.turn_count += 1
                 st.rerun()
 
 elif page == "マイページ（目標・AI相談）":
     st.header(f"📱 {user_name} さんのマイページ")
-    st.caption("🔒 このページの内容はあなた専用（非公開）です。")
-    # ... (マイページ機能は以前のコードと同様に維持)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("🎯 現在の目標")
+        conn = sqlite3.connect(get_file_path('kpi_app.db'))
+        goal_df = pd.read_sql_query("SELECT content, timestamp FROM messages WHERE employee_id=? AND role='assistant' AND content LIKE '%完了しました%' ORDER BY timestamp DESC LIMIT 1", conn, params=(st.session_state.login_id,))
+        conn.close()
+        if not goal_df.empty:
+            st.success(f"**設定日: {goal_df.iloc[0]['timestamp']}**\n\n🎯 {goal_df.iloc[0]['content']}")
+        
+        st.subheader("📓 自分用メモ")
+        st.text_area("気づきを記録（非公開・一時保存）", height=200)
+        st.button("メモを保存（デモ）")
 
-# --- 6. 管理者画面（人事考課・評価参考モード） ---
+    with col2:
+        st.subheader("🤖 AIメンターへの自由相談")
+        query = st.text_input("仕事の悩みや相談をどうぞ")
+        if query:
+            with st.spinner("AIが回答中..."):
+                res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": query}])
+                st.info(res.choices[0].message.content)
+
 elif page == "管理者画面":
-    st.header("🏆 人事考課・査定支援ダッシュボード")
-    st.caption("担当者の日々の活動を分析し、賞与や昇進の判断材料を可視化します。")
-    
+    import pandas as pd
+    st.header("🏆 人事査定・昇進シミュレーター")
     try:
         conn = sqlite3.connect(get_file_path('kpi_app.db'))
-        # 全振り返りログを取得
         df = pd.read_sql_query("SELECT * FROM messages ORDER BY timestamp DESC", conn)
         conn.close()
-
-        if df.empty:
-            st.info("データが蓄積されていません。")
-        else:
-            # 1. 活動アクティビティ一覧（営業活動の「量」を把握）
-            st.subheader("👥 担当者の活動状況（最新順）")
+        if not df.empty:
+            target_options = {eid: f"{info['name']} ({info['department']})" for eid, info in employee_master.items() if eid != "ADMIN01"}
+            selected_eid = st.selectbox("査定する社員を選択", options=list(target_options.keys()), format_func=lambda x: target_options[x])
+            t_logs = df[df['employee_id'] == selected_eid].sort_values('timestamp', ascending=True)
+            if st.button("評価案を生成"):
+                with st.spinner("分析中..."):
+                    all_text = "\n".join([f"{row['role']}: {row['content']}" for _, row in t_logs.iterrows()])
+                    res = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "system", "content": "人事評価者として分析して"}, {"role": "user", "content": all_text}])
+                    st.markdown(res.choices[0].message.content)
+            st.dataframe(t_logs)
     except Exception as e:
-        st.error(f"データベース処理中にエラーが発生しました: {e}")
-
-    # except外に移動（インデント修正）
-    if 'df' in locals() and not df.empty:
-        summary = df.groupby('employee_id').agg(last_active=('timestamp', 'max'), total_posts=('id', 'count')).reset_index()
-        summary['name'] = summary['employee_id'].apply(lambda x: employee_master.get(x, {}).get('name', '不明'))
-        summary['dept'] = summary['employee_id'].apply(lambda x: employee_master.get(x, {}).get('department', '不明'))
-        st.dataframe(summary[['name', 'dept', 'total_posts', 'last_active']], hide_index=True, use_container_width=True)
-
-        st.divider()
-
-        # 2. 個別査定レポート生成（営業活動の「質」を分析）
-        st.subheader("🧐 個別査定・昇進判断レポート")
-        target_opts = {eid: f"{info['name']} ({info['department']})" for eid, info in employee_master.items() if eid != "ADMIN01"}
-        selected_eid = st.selectbox("分析する担当者を選択", options=list(target_opts.keys()), format_func=lambda x: target_opts[x])
-        
-        if selected_eid:
-                t_logs = df[df['employee_id'] == selected_eid].sort_values('timestamp', ascending=True)
-                
-                # 目標設定の変遷を表示（成長の軌跡）
-                with st.expander(f"📌 {employee_master[selected_eid]['name']} さんの目標履歴を確認する"):
-                    goals = t_logs[t_logs['content'].str.contains('目標は|完了しました', na=False)]
-                    st.dataframe(goals[['timestamp', 'content']], hide_index=True, use_container_width=True)
-
-                if st.button(f"{employee_master[selected_eid]['name']} さんの評価参考レポートを生成"):
-                    with st.spinner("これまでの全ログをAIがスキャン中..."):
-                        all_log_text = "\n".join([f"{r['timestamp']} [{r['role']}]: {r['content']}" for _, r in t_logs.iterrows()])
-                        t_dept = employee_master[selected_eid]['department']
-                        kpi_l = "、".join(kpi_data.get(t_dept, ["全般的貢献"]))
-                        
-                        # 考課に特化した評価プロンプト
-                        prompt = f"""
-                        あなたは公平な人事評価委員です。以下のログに基づき、賞与（年2回）や昇進（年1回）の判断材料を作成してください。
-                        
-                        【部署KPI】: {kpi_l}
-                        
-                        【分析項目】:
-                        1. 活動の具体性とKPIへの貢献
-                        2. 課題発見・解決への姿勢
-                        3. チーム貢献度
-                        """
+        st.error(f"データエラー: {e}")
