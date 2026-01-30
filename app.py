@@ -97,12 +97,12 @@ dept_name = user_info["department"]
 
 # パスワード再設定UI（サイドバー下部に表示）
 def update_password(new_pw):
+    global employee_master
     import json
     employee_master[st.session_state.login_id]["password"] = new_pw
-    with open(get_file_path("employee_master.json"), "w", encoding="utf-8") as f:  # ←ここもutf-8に
+    with open(get_file_path("employee_master.json"), "w", encoding="utf-8") as f:
         json.dump(employee_master, f, ensure_ascii=False, indent=2)
-    global employee_master
-    employee_master = load_json_data("employee_master.json")  # ←再読込
+    employee_master = load_json_data("employee_master.json")
 
 with st.sidebar:
     st.markdown("---")
